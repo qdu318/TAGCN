@@ -33,22 +33,18 @@ class TemporalBlock(nn.Module):
     """
     def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
         super(TemporalBlock, self).__init__()
-        # 经过conv1，输出的size其实是(Batch, input_channel, seq_len + padding)
 
-        #可以试试conv2d？
         self.c=nn.Conv1d(in_channels=5, out_channels=n_outputs, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
         # self.conv1 = weight_norm(nn.Conv1d(in_channels=n_inputs, out_channels=n_outputs, kernel_size= kernel_size, stride=stride, padding=padding, dilation=dilation))
         self.conv1 = weight_norm(nn.Conv1d(in_channels=5, out_channels=5, kernel_size= kernel_size, stride=stride, padding=padding, dilation=dilation))
-        # 裁剪掉多出来的padding部分，维持输出时间步为seq_len
+
         self.chomp1 = Chomp1d(padding)
         self.relu1 = nn.Tanh()
         self.dropout1 = nn.Dropout(dropout)
 
         self.conv2 = weight_norm(nn.Conv1d(in_channels=5, out_channels=5, kernel_size=kernel_size,
                                            stride=stride, padding=padding, dilation=dilation))
-        # self.conv2 = weight_norm(nn.Conv1d(in_channels=n_outputs, out_channels=n_outputs, kernel_size=kernel_size,
-        #                                            stride=stride, padding=padding, dilation=dilation))
-        #  裁剪掉多出来的padding部分，维持输出时间步为seq_len
+
         self.chomp2 = Chomp1d(padding)
         self.relu2 = nn.Tanh()
         self.dropout2 = nn.Dropout(dropout)
