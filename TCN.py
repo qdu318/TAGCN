@@ -34,17 +34,17 @@ class TemporalBlock(nn.Module):
     def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
         super(TemporalBlock, self).__init__()
 
-        self.c=nn.Conv1d(in_channels=5, out_channels=n_outputs, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
+        self.c = nn.Conv2d(in_channels=5, out_channels=n_outputs, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
         # self.conv1 = weight_norm(nn.Conv1d(in_channels=n_inputs, out_channels=n_outputs, kernel_size= kernel_size, stride=stride, padding=padding, dilation=dilation))
-        self.conv1 = weight_norm(nn.Conv1d(in_channels=5, out_channels=5, kernel_size= kernel_size, stride=stride, padding=padding, dilation=dilation))
-
+        self.conv1 = weight_norm(nn.Conv2d(in_channels=5, out_channels=5, kernel_size= kernel_size, stride=stride, padding=padding, dilation=dilation))
         self.chomp1 = Chomp1d(padding)
         self.relu1 = nn.Tanh()
         self.dropout1 = nn.Dropout(dropout)
 
-        self.conv2 = weight_norm(nn.Conv1d(in_channels=5, out_channels=5, kernel_size=kernel_size,
+        self.conv2 = weight_norm(nn.Conv2d(in_channels=5, out_channels=5, kernel_size=kernel_size,
                                            stride=stride, padding=padding, dilation=dilation))
-
+        # self.conv2 = weight_norm(nn.Conv1d(in_channels=n_outputs, out_channels=n_outputs, kernel_size=kernel_size,
+        #                                            stride=stride, padding=padding, dilation=dilation))
         self.chomp2 = Chomp1d(padding)
         self.relu2 = nn.Tanh()
         self.dropout2 = nn.Dropout(dropout)
@@ -52,7 +52,7 @@ class TemporalBlock(nn.Module):
         self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
                                  self.conv2, self.chomp2, self.relu2, self.dropout2)
         #self.downsample = nn.Conv1d(in_channels=5, out_channels=n_outputs, kernel_size=2 * padding + 1, padding=padding)
-        self.downsample = nn.Conv1d(in_channels=5, out_channels=5, kernel_size=2 * padding + 1, padding=padding)
+        self.downsample = nn.Conv2d(in_channels=5, out_channels=5, kernel_size=(2 * padding + 1, 1), padding=padding)
         self.relu = nn.ReLU()
         self.init_weights()
 
@@ -72,15 +72,15 @@ class TemporalBlock(nn.Module):
         :return:
         """
         #x=x.permute(0,3,1,2)
-        a=self.conv1(x)
-        a=self.chomp1(a)
-        a=self.relu1(a)
-        a=self.dropout1(a)
-        b=self.conv2(a)
-        b=self.chomp2(b)
-        b=self.relu2(b)
-        out=self.dropout2(b)
-        #out = self.net(x)
+        # a = self.conv1(x)
+        # a = self.chomp1(a)
+        # a = self.relu1(a)
+        # a = self.dropout1(a)
+        # b = self.conv2(a)
+        # b = self.chomp2(b)
+        # b = self.relu2(b)
+        # out = self.dropout2(b)
+        out = self.net(x)
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
 
