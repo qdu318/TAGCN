@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from stgcn import STGCN
+from TAGCN import STGCN
 # from stgcn_origin import STGCN
 # from gcn import STGCN
 # from TGCN import STGCN
