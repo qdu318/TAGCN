@@ -47,8 +47,6 @@ class TCNBlock(nn.Module):
         num_timesteps_out, num_features_out=out_channels)
         """
         X = self.tcn(X.permute(0, 2, 1, 3))
-        # X = self.linear2(torch.reshape(X,(-1,300)))
-        # X = X.permute(0, 2, 1, 3)
         return X
 
 
@@ -80,13 +78,6 @@ class TimeBlock(nn.Module):
         :return: Output data of shape (batch_size, num_nodes,
         num_timesteps_out, num_features_out=out_channels)
         """
-        # Convert into NCHW format for pytorch to perform convolutions.
-        # X = X.permute(0, 2, 1)
-        # temp = self.conv1(X) + torch.sigmoid(self.conv2(X))
-        # out = F.relu(temp + self.conv3(X))
-        # # Convert back from NCHW to NHWC
-        # out = out.permute(0, 2, 1)
-
         lhs = torch.matmul(torch.matmul(X.permute(0, 2, 3, 1), self.U_1), self.U_2)
         rhs = torch.matmul(X, self.U_3)
         # product = torch.matmul(lhs.permute(0,2,1), rhs).permute(0,2,1)
@@ -142,11 +133,7 @@ class STGCNBlock(nn.Module):
         self.batch_norm = nn.BatchNorm2d(num_nodes)
         self.reset_parameters()
         self.cheb_polynomials = cheb_polynomials
-        self.conv = nn.Conv2d(in_channels=60,
-                            out_channels=60,
-                            kernel_size=(3, 18),
-                              padding=(1, 1)
-                            )
+        self.conv = nn.Conv2d(in_channels=60, out_channels=60, kernel_size=(3, 18), padding=(1, 1))
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.Theta1.shape[1])
         self.Theta1.data.uniform_(-stdv, stdv)
@@ -160,12 +147,40 @@ class STGCNBlock(nn.Module):
         :return: Output data of shape (batch_size, num_nodes,
         num_timesteps_out, num_features=out_channels).
         """
+        # (batch_size, num_of_vertices,
+        #  num_of_timesteps, num_of_features) = X.shape
+
+        # global device
 
         t = self.temporal1(X)
-        A_hat=A_hat.to(torch.float32)
-        t2 = torch.einsum("ij,mlik->mljk", [A_hat, t])
-        t3 = self.temporal2(t2.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+        A = np.array(A_hat.cpu())
+        cheb_polynomials = torch.tensor(cheb_polynomial(A, 3), dtype=torch.float32).to(device="cpu")
+        outputs = []
+
+        #     graph_signal = t[:, :, :, time_step]
+        for time_step in range(5):
+            # shape is (batch_size, V, F)
+            graph_signal = t[:, :, :, time_step]
+            # graph_signal = x[:, :, :, time_step]
+            output = torch.zeros(29, 5, 300).to(device)
+            for k in range(3):
+                T_k = cheb_polynomials[k]
+                T_k = T_k.to(device = device)
+            # rhs = torch.matmul(T_k, t.permute(1, 0)).permute(1, 0)
+                rhs = torch.matmul(T_k, graph_signal).permute(0, 2, 1)
+                t2 = F.relu(torch.matmul(rhs, self.Theta1))
+                # output = output + torch.matmul(rhs, theta_k)
+                output = output + t2
+            outputs.append(torch.unsqueeze(output, -1))
+        outputs = F.relu(torch.cat(outputs, dim=-1))
+
+        t3 = self.temporal2(outputs.permute(0, 2, 1, 3))
+
+        # a=self.batch_norm(t3)
         return self.batch_norm(t3)
+
+        # return t3
+
 
 class STGCN(nn.Module):
     """
@@ -195,15 +210,11 @@ class STGCN(nn.Module):
         #                          spatial_channels=16, num_nodes=num_nodes)
         # self.block2 = STGCNBlock(in_channels=64, out_channels_1=16, out_channels_2=64,
         #                          spatial_channels=16, num_nodes=num_nodes)
-        #
         self.last_temporal = TimeBlock(in_channels=60, out_channels=60)
         # self.fully = nn.Linear(384, num_timesteps_output)
+        self.conv = nn.Conv2d(in_channels=60, out_channels=60, kernel_size=(5, 10), padding=(0, 0))
+        self.fully = nn.Linear(120, 1)
 
-        #改维度
-        self.conv = nn.Conv2d(in_channels=60,out_channels=60,kernel_size=(5, 10),padding=(0, 0) )
-        self.fully = nn.Linear(244, 1)
-        # self.fully = nn.Linear((num_timesteps_input - 2 * 5) * 64 * 2,
-        #                        num_timesteps_output)
 
     # def forward(self, A_hat, X, Weather):
     def forward(self, A_hat, X):
@@ -215,16 +226,13 @@ class STGCN(nn.Module):
         # out3 = self.block1(X, A_hat, Weather)
         t_attention = self.last_temporal(X)
         # X = torch.einsum("ilj,jm->ilm", [X, t_attention])
-        # X = torch.matmul(X.reshape(-1, 60, 5), t_attention)
-        X = (X.permute(1, 0, 2, 3) * t_attention).permute(1, 0, 2, 3)
-        # X = X.reshape(-1, 60, 5, 1)
+        X = torch.matmul(X.reshape(-1, 60, 5), t_attention)
+        X = X.reshape(-1, 60, 5, 1)
         out3 = self.block1(X, A_hat)
         # out2 = self.block2(out3, A_hat)
         # out3 = torch.unsqueeze(out3, dim=-1)
-        # out3 = out3.reshape(-1, 60, 5, 129)
         out3 = F.relu(self.conv(out3))
         # out3 = F.relu(self.conv1(out3))
-
         # out2 = self.block2(out1, A_hat)
         # out3 = self.last_temporal(out2)
         # out3 = layer_normal(out2)
